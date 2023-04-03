@@ -51,7 +51,7 @@ void BatteryDisplayMode_Button() {
   Button_PushGet();
 
   //ボタンが押されていたら処理
-    BtnNo = 0;
+  int BtnNo = 0;
   if ((digitalRead(BTN_PIN1) == LOW) && ((btnpushmill[BtnNo] + 20) < millis())) BriMill = millis();
   if (btnpushflg[BtnNo] == 4) bootingMin = 0;
   if (btnpushflg[BtnNo] > 0) {
@@ -75,7 +75,7 @@ void BatteryDisplayMode_Button() {
   }
   btnpushflg[BtnNo] = 0;
   
-  int BtnNo = 1;
+  BtnNo = 1;
   if ((digitalRead(BTN_PIN0) == LOW) && ((btnpushmill[BtnNo] + 20) < millis())) BriMill = millis();
   if (btnpushflg[BtnNo] > 0) {
     if (Gainflg == false) {

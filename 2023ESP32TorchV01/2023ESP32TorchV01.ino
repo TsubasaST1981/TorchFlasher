@@ -2,7 +2,7 @@
 #include <EEPROM.h>
 #include <NimBLEDevice.h>
 //#include <BLEDevice.h>
-//#include <BLEServer.h> //67 22
+//#include <BLEServer.h>
 //#include <BLEUtils.h>
 //#include <BLE2902.h>
 #include <Adafruit_MPU6050.h>
@@ -25,11 +25,7 @@
 #include <JPEGDecoder.h>
 #include <time.h>
 
-int testlastcol = 16;
-void testoutput() {
-
-}
-//Wifi設定　　http://TorchFlasher-4427.local/
+//Wifi設定　　http://TorchFlasher-xxxx.local/
 //基本設定
 const uint8_t Ver = 60;
 uint8_t ModeNoMAX = 8;
@@ -486,7 +482,7 @@ int Wifilocalinit() {
 
       //アクセスポイントモード
       WiFi.mode(WIFI_AP);
-      WiFi.softAP(ssidlocal, passwordloca);
+      WiFi.softAP(ssidlocal);
       vTaskDelay(200);
       WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
       //udp.begin(LOCAL_PORT);
