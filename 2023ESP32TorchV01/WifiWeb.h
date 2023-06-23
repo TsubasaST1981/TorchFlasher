@@ -166,7 +166,7 @@ void EspOTAsetting() {
 }
 
 
-
+//データリセット確認
 void allDataResetcheck() {
   String Html = Headder_str();
   Html += "<h1>ALLdataReset</h1>";
@@ -176,12 +176,64 @@ void allDataResetcheck() {
   Html += "<a href='/'>Back to Root</a>";
   Server.send(200, "text/html", Html);
 }
-
+//データリセット
 void allDataReset() {
   EEPMill = 1;
   EEPROM.put(EEP_ADRS0, 1);
   EEPWrite();
   ESP.restart(); // restart ESP32
+}
+
+//オンラインアップデート確認
+void OnlineUpdateCheck() {
+  String Html = Headder_str();
+  Html += "<h1>OnlineUpdate SystemFile</h1>";
+  Html += "<form action='/OnlineUpdate' method='POST'>";
+  Html += "<input type='submit' value='Update'>";
+  Html += "</form><br><br>";
+  Html += "<a href='/'>Back to Root</a>";
+  Server.send(200, "text/html", Html);
+}
+//オンラインアップデート実行
+void OnlineUpdate() {
+  int LEDCnt = 1;
+  setColor(CRGB(85, 85, 85), LEDCnt);
+
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  vTaskDelay(100);
+  WiFi.mode(WIFI_STA);
+  WiFiMulti.addAP(ssid, password);
+
+  while ((WiFiMulti.run() != WL_CONNECTED) && (LEDCnt < 10)) {
+    LEDCnt++;
+    setColor(CRGB(85, 85, 85), LEDCnt);
+    vTaskDelay(1000);
+  }
+  if (WiFiMulti.run() == WL_CONNECTED) {
+    setColor(CRGB(85, 85, 85), 10);
+
+    WiFiClient client;
+    t_httpUpdate_return ret = httpUpdate.updateSpiffs(client, "https://github.com/TsubasaST1981/TorchFlasher/raw/Release/2023ESP32TorchV01.LittleFS.esp32.bin");
+    if (ret == HTTP_UPDATE_OK) {
+      setColor(CRGB(85, 85, 85), 15);
+
+      ret = httpUpdate.update(client, "https://github.com/TsubasaST1981/TorchFlasher/raw/Release/2023ESP32TorchV01.ino.esp32.bin");
+      if (ret == HTTP_UPDATE_OK) {
+        setColor(CRGB(85, 85, 85));
+        playMP3(mp3File[36]);
+        vTaskDelay(3000);
+        ESP.restart(); // restart ESP32
+      }
+    }
+  }
+  //失敗
+  setColor(CRGB(255, 0, 0));
+  playMP3(mp3File[15]);
+  String Html = Headder_str();
+  Html += "<h1>OnlineUpdate Error</h1><br>";
+  Html += "<br><br><a href='/'>Back to Root</a>";
+  Server.send(200, "text/html", Html);
 }
 
 void StringSet() {
@@ -210,6 +262,7 @@ String StrDataForm() {
 void RTtextinput() {
   String Html = Headder_str();
   Html += StrDataForm();
+  Html += "<a href='/OnlineUpdateCheck'>OS Online update</a><br>";
   Html += "<a href='/upOSfile'>OSupload</a><br><br>";
   Html += "<br><br><a href='/allReset'>ALLdataReset</a>";
 

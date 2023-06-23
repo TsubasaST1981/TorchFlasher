@@ -24,6 +24,9 @@
 #include <WiFiAP.h>
 #include <JPEGDecoder.h>
 #include <time.h>
+#include <HTTPClient.h>
+#include <HTTPUpdate.h>
+#include <WiFiMulti.h>
 
 //Wifi設定　　http://TorchFlasher-xxxx.local/
 //基本設定
@@ -146,6 +149,9 @@ TaskHandle_t thp[1];
 
 //加速度計
 Adafruit_MPU6050 mpu;
+
+//オンラインアップデート用
+WiFiMulti WiFiMulti;
 
 //電池残量取得
 int battvoltget() {
@@ -528,6 +534,8 @@ void Wifimode() {
     }
   });
   Server.on("/StringSet", StringSet);
+  Server.on("/OnlineUpdate", OnlineUpdate);
+  Server.on("/OnlineUpdateCheck", OnlineUpdateCheck);
   Server.begin();
 
   playMP3(mp3File[21]);
