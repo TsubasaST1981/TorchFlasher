@@ -41,6 +41,7 @@ void Button_PushGet() {
   else {
     LastChangeMill = millis();
     EEPMill = millis();
+    ModeChangeFlg = true;
   }
 }
 
@@ -74,7 +75,7 @@ void BatteryDisplayMode_Button() {
     }
   }
   btnpushflg[BtnNo] = 0;
-  
+
   BtnNo = 1;
   if ((digitalRead(BTN_PIN0) == LOW) && ((btnpushmill[BtnNo] + 20) < millis())) BriMill = millis();
   if (btnpushflg[BtnNo] > 0) {
@@ -101,12 +102,21 @@ void BatteryDisplayMode_Button() {
     if (btnpushflg[BtnNo] == 1) {
       if ((btn2lastmill + 500) > millis()) {
         btn2pushcnt++;
-        if (btn2pushcnt >= 4) Wifimode();
+        if (btn2pushcnt >= 4) {
+          if (Gainflg == true) Wifimode();
+          else {
+            WifilocalMode += 1;
+            if (WifilocalMode > 2) WifilocalMode = 0;
+            EEPMill = 1;
+            Wifilocalinit();
+          }
+          btn2pushcnt = 0;
+        }
       }
       else btn2pushcnt = 0;
       btn2lastmill = millis();
     }
-    
+
     if (btnpushflg[BtnNo] == 3) {
       Gainflg = !Gainflg;
       if (Gainflg == true) playMP3(mp3File[3]);
@@ -116,6 +126,9 @@ void BatteryDisplayMode_Button() {
   }
 
   btnpushflg[BtnNo] = 0;
+
+  if (ModeChangeFlg == true) udpModeCast();
+  ModeChangeFlg = false;
 }
 
 //メインループのボタンチェック
@@ -135,6 +148,7 @@ void Button_Check_Mainloop() {
       else MemoryNo++;
       MemoryDisplay();
       ModeSound();
+      MemoryChangeFlg = true;
     }
   }
   if (btnpushflg[BtnNo] == 2) {
@@ -147,6 +161,7 @@ void Button_Check_Mainloop() {
       else MemoryNo++;
       MemoryDisplay();
       ModeSound();
+      MemoryChangeFlg = true;
     }
   }
   if (btnpushflg[BtnNo] == 3) {
@@ -228,6 +243,7 @@ void Button_Check_Mainloop() {
       else MemoryNo--;
       MemoryDisplay();
       ModeSound();
+      MemoryChangeFlg = true;
     }
   }
   if (btnpushflg[BtnNo] == 2) {
@@ -256,6 +272,7 @@ void Button_Check_Mainloop() {
       else MemoryNo--;
       MemoryDisplay();
       ModeSound();
+      MemoryChangeFlg = true;
     }
   }
   if (btnpushflg[BtnNo] == 3) {
@@ -293,4 +310,9 @@ void Button_Check_Mainloop() {
   }
   if (btnpushflg[BtnNo] == 4) DeepSleepMode();
   btnpushflg[BtnNo] = 0;
+
+  if (MemoryChangeFlg == true) udpMemoryCast();
+  else if (ModeChangeFlg == true) udpModeCast();
+  MemoryChangeFlg = false;
+  ModeChangeFlg = false;
 }

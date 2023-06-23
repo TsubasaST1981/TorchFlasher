@@ -13,11 +13,11 @@
 #include "efontEnableJa.h"
 #include "efont.h"
 #include <FS.h>
-#include <SPIFFS.h>
+//#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
-//#include <WiFiUdp.h>
 #include <WiFiUDP.h>
 #include <Update.h>
 #include <ArduinoOTA.h>
@@ -27,7 +27,7 @@
 
 //Wifi設定　　http://TorchFlasher-xxxx.local/
 //基本設定
-const uint8_t Ver = 60;
+const uint8_t Ver = 61;
 uint8_t ModeNoMAX = 8;
 bool TestMode = false; //起動時間測定
 
@@ -52,7 +52,7 @@ long bootingSecbuff = 0;
 unsigned long bootingStartMill = 0;
 
 //音ファイルリスト
-char mp3File[71][30] = {
+char mp3File[75][30] = {
   "/0_kidou.mp3",
   "/1_02_bri-max.mp3",
   "/2_02_bri-min.mp3",
@@ -123,7 +123,11 @@ char mp3File[71][30] = {
   "/67_Mozi7.mp3",
   "/68_Mozi8.mp3",
   "/69_Mozi9.mp3",
-  "/70_Mozi10.mp3"
+  "/70_Mozi10.mp3",
+  "/71_SyncMode.mp3",
+  "/72_SyncEnd.mp3",
+  "/73_SyncHost.mp3",
+  "/74_SyncClient.mp3"
 };
 
 //時間オブジェクト
@@ -190,8 +194,8 @@ void RestartESP32() {
   esp_deep_sleep_start();
 
 }
-#include "ButtonPush.h"
 #include "WifiWeb.h"
+#include "ButtonPush.h"
 #include "BLESetting.h"
 
 //起動セットアップ
@@ -277,7 +281,7 @@ void setup() {
   //文字列を読み込み
   strtobuff(stringdata[strnowcnt]);
 
-  //サウンド設定
+  //サウンド他サブルーチン
   xTaskCreatePinnedToCore(Core0task, "Core0task", 8192, NULL, 7, &thp[0], 0);
   //起動音
   if (wakeup_reason != ESP_SLEEP_WAKEUP_TIMER) playMP3(mp3File[0]);
@@ -330,7 +334,7 @@ void setup() {
   BLEinit();
 
   //画像読み込み
-  SPIFFS.begin();
+  LittleFS.begin();
   setColor(CRGB(255, 255, 255));
   Jpegtobuff(jpegFiles[PictureNo]);
   setColor(CRGB(0, 0, 0));
@@ -338,21 +342,86 @@ void setup() {
   //モード音声
   while (mp3->isRunning()) vTaskDelay(10);
   ModeSound();
+  vTaskDelay(100);
+  while (mp3->isRunning()) vTaskDelay(10);
+
+  //同期設定
+  Wifilocalinit(true);
 
   LastChangeMill = millis();
 }
 
+//サブループMP3
+void Core0task(void *args) {
+  //サウンド設定
+  LittleFS.begin();
+  out = new AudioOutputI2S(0, 0);
+  out->SetPinout(26, 25, 22);
+  out->SetOutputModeMono(true);
+  out->SetGain((float)SoundGain * 0.5);
+  mp3 = new AudioGeneratorMP3();
+
+  while (1) {
+    if (PlayFileName[0] != "") {
+      if (mp3->isRunning()) {
+        mp3->stop();
+        delete mp3;
+        mp3 = new AudioGeneratorMP3();
+      }
+      file = new AudioFileSourceLittleFS(PlayFileName[0]);
+      if (!file) ;
+      else mp3->begin(file, out);
+      PlayFileName[0] = "";
+    } else if (mp3->isRunning()) {
+      if (!mp3->loop()) {
+        mp3->stop();
+        delete mp3;
+        mp3 = new AudioGeneratorMP3();
+      }
+    } else if ((PlayFileName[0] == "") && (PlayFileName[1] != "")) {
+      PlayFileName[0] = PlayFileName[1];
+      PlayFileName[1] = "";
+    } else {
+      NonStopSound = false;
+    }
+
+    vTaskDelay(1);
+
+    //スローメモリ 起動時間計測
+    if (TestMode == true) {
+      bootingSecbuff = (millis() - bootingStartMill) / 1000;
+      if (bootingSecbuff > 300) bootingStartMill = millis();
+      else if (bootingSecbuff > 60) {
+        bootingMin += bootingSecbuff / 60;
+        bootingStartMill = millis() - ((bootingSecbuff % 60) * 1000);
+
+        if ((bootingMin % 30) == 0) {
+          BriMill = millis();
+          Gainflg = false;
+          playMP3(mp3File[38 + (bootingMin / 30)]);
+        }
+      }
+    }
+  }
+}
+
+//Wifiアップデートモード
 void Wifimode() {
   playMP3(mp3File[35]);
   setColor(CRGB(50, 50, 50));
 
   //Wifi起動
-  uint8_t retry = 0;
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  vTaskDelay(100);
+  WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
+  vTaskDelay(500);
+  WiFi.setTxPower(WIFI_POWER_15dBm);
+
+  CountDowmMill = millis();
   while (WiFi.status() != WL_CONNECTED) {
-    vTaskDelay(200); // 200ms
-    retry++;
-    if (retry > 50) { // 200ms x 50 = 10 sec
+    if ((millis() - CountDowmMill) > 10000) { //10 sec
       //アクセスポイントモード
       setColor(CRGB(0, 0, 150));
 
@@ -363,6 +432,8 @@ void Wifimode() {
       WiFi.softAP(DeviceName);
       vTaskDelay(200);
       WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
+      vTaskDelay(500);
+      WiFi.setTxPower(WIFI_POWER_15dBm);
 
       EspOTAsetting();
 
@@ -412,6 +483,7 @@ void Wifimode() {
       playMP3(mp3File[20]);
       ServerLoop();
     }
+    CountDownDisplay(true);
   }
 
   //Wifiで時間合わせ
@@ -461,38 +533,6 @@ void Wifimode() {
   playMP3(mp3File[21]);
 
   ServerLoop();
-}
-
-//Wifi同期操作
-int Wifilocalinit() {
-  playMP3(mp3File[34]);  //音追加
-  setColor(CRGB(50, 50, 50));
-
-  //Wifi起動
-  uint8_t retry = 0;
-  WiFi.begin(ssidlocal, passwordlocal);
-  while (WiFi.status() != WL_CONNECTED) {
-    vTaskDelay(100); // 200ms
-    retry++;
-    if (retry > 50) { // 200ms x 50 = 10 sec
-      //Wifi切断
-      WiFi.disconnect(true);
-      WiFi.mode(WIFI_OFF);
-      vTaskDelay(100);
-
-      //アクセスポイントモード
-      WiFi.mode(WIFI_AP);
-      WiFi.softAP(ssidlocal);
-      vTaskDelay(200);
-      WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
-      //udp.begin(LOCAL_PORT);
-      playMP3(mp3File[20]);
-      return 1;
-    }
-  }
-  //udp.begin(LOCAL_PORT);
-  playMP3(mp3File[21]);
-  return 2;
 }
 
 //サーバーモードループ
@@ -596,6 +636,20 @@ void loop() {
     strtobuff(stringdata[strnowcnt]);
     EEPMill = millis();
     bleflg = false;
+  }
+
+  //WifiUDP処理
+  if ((WifiClientSetup == false) && (WifilocalMode >= 2))  {
+    if (WiFi.status() == WL_CONNECTED) {
+      udp.begin(LOCAL_PORT);
+      vTaskDelay(200);
+      while (mp3->isRunning()) vTaskDelay(10);
+      playMP3(mp3File[74]);
+      WifiClientSetup = true;
+    }
+  } else {
+    //UDP送受信処理
+    udpGettoPut();
   }
 
   vTaskDelay(1);

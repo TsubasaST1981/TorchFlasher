@@ -268,65 +268,107 @@ void OSfileUp() {
   Server.send(200, "text/html", Html);
 }
 
-////UDP受信返答
-//void udpGettoPut() {
-//  uint8_t packetBuffer[256];
-//
-//  int packetSize = udp.parsePacket();
-//  if (packetSize > 0) {
-//    int len = udp.read(packetBuffer, packetSize);
-//    int packetInt = udpGet(packetBuffer[0]);
-//    if (packetInt == 5) {
-//      uint8_t Idbuff[8];
-//      for (int i = 1; i < len; i++) {
-//        if (i < 9) {
-//          Idbuff[i - 1] = packetBuffer[i];
-//        }
-//      }
-//      int retData = CardID_S(Idbuff);
-//      if (retData == -1) retData = 255;
-//      else {
-//        sprintf(row2, "リモートNFC操作");
-//        if (BouhanMode == true) {
-//          BouhanMode = false;
-//          EEPWrite();
-//          onmill = millis();
-//          sprintf(row3, "防犯モードを解除");
-//          SetBuzzer(500);
-//          Sendmsg = messageEndCard;
-//        } else {
-//          BouhanMode = true;
-//          EEPWrite();
-//          onmill = millis();
-//          sprintf(row3, "防犯モードに設定");
-//          SetBuzzer(100, 100, 5);
-//          Sendmsg = messageStartCard;
-//        }
-//        SSheetWrite = 5;
-//      }
-//
-//      uint8_t retPacket[2];
-//      retPacket[0] = (uint8_t)BouhanMode;
-//      retPacket[1] = (uint8_t)retData;
-//
-//      // 相手のIPアドレス取得
-//      remoteIP = udp.remoteIP();
-//
-//      // パケット送信
-//      udp.beginPacket(remoteIP, REMOTE_PORT);
-//      udp.write(retPacket[0]);
-//      udp.write(retPacket[1]);
-//      udp.endPacket();
-//
-//    } else {
-//      // 相手のIPアドレス取得
-//      remoteIP = udp.remoteIP();
-//
-//      // パケット送信
-//      udp.beginPacket(remoteIP, REMOTE_PORT);
-//      udp.write((uint8_t)BouhanMode);
-//      udp.endPacket();
-//
-//    }
-//  }
-//}
+//UDPブロードキャスト
+void udpModeCast() {
+  if (WifilocalMode == 0) return;
+
+  uint8_t sendPacket[9];
+  sendPacket[0] = ModeNo;
+  sendPacket[1] = (uint8_t)(ColorNo / 256);
+  sendPacket[2] = (uint8_t)(ColorNo % 256);
+  sendPacket[3] = strnowcnt;
+  sendPacket[4] = (uint8_t)MoziHalfMode;
+  sendPacket[5] = CountDownMax;
+  sendPacket[6] = PictureNo;
+  sendPacket[7] = Brightness;
+  sendPacket[8] = SoundGain;
+
+  // パケット送信
+  udp.beginPacket(castIP, REMOTE_PORT);
+  udp.write(sendPacket[0]);
+  udp.write(sendPacket[1]);
+  udp.write(sendPacket[2]);
+  udp.write(sendPacket[3]);
+  udp.write(sendPacket[4]);
+  udp.write(sendPacket[5]);
+  udp.write(sendPacket[6]);
+  udp.write(sendPacket[7]);
+  udp.write(sendPacket[8]);
+  udp.endPacket();
+  LastSendUdpMill = millis();
+}
+
+//UDPメモリーブロードキャスト
+void udpMemoryCast() {
+  if (WifilocalMode == 0) return;
+
+  uint8_t sendPacket[1];
+  sendPacket[0] = MemoryNo;
+
+  // パケット送信
+  udp.beginPacket(castIP, REMOTE_PORT);
+  udp.write(sendPacket[0]);
+  udp.endPacket();
+  LastSendUdpMill = millis();
+}
+
+//UDP受信返答
+void udpGettoPut() {
+  if (WifilocalMode == 0) return;
+
+  uint8_t packetBuffer[9];
+
+  int packetSize = udp.parsePacket();
+  if (packetSize > 0) {
+    int len = udp.read(packetBuffer, packetSize);
+
+    if (packetSize == 9) {
+      ModeNo = packetBuffer[0];
+      ColorNo = (packetBuffer[1] * 256) + packetBuffer[2];
+      strnowcnt = packetBuffer[3];
+      MoziHalfMode = (bool)packetBuffer[4];
+      CountDownMax = packetBuffer[5];
+      PictureNo = packetBuffer[6];
+      Brightness = packetBuffer[7];
+      SoundGain = packetBuffer[8];
+    } else if (packetSize == 1) {
+      MemoryNo = packetBuffer[0];
+      MemoryDisplay();
+    }
+  }
+}
+
+//Wifi同期初期化
+void Wifilocalinit(bool Setupflg = false) {
+  //切断処理
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  vTaskDelay(100);
+
+
+  if (WifilocalMode == 0) {
+    if (Setupflg == false) playMP3(mp3File[72]);
+  } else {
+    playMP3(mp3File[71]);
+    if (WifilocalMode == 1) {
+      //アクセスポイントモード　※ホスト
+      WiFi.mode(WIFI_AP);
+      WiFi.softAP("TorchFlasher", "TorchFlasher");
+      vTaskDelay(200);
+      WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
+      vTaskDelay(500);
+      WiFi.setTxPower(WIFI_POWER_15dBm);
+      udp.begin(LOCAL_PORT);
+      while (mp3->isRunning()) vTaskDelay(10);
+      playMP3(mp3File[73]);
+    } else {
+      //ステーションモード　※クライアント
+      WiFi.mode(WIFI_STA);
+      WiFi.begin("TorchFlasher", "TorchFlasher");
+      vTaskDelay(500);
+      WiFi.setTxPower(WIFI_POWER_15dBm);
+      while (mp3->isRunning()) vTaskDelay(10);
+      WifiClientSetup = false;
+    }
+  }
+}

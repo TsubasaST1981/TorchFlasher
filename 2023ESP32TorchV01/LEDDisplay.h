@@ -274,17 +274,20 @@ void updownColorGyro(int TotalMill, bool upflg) {
 }
 
 //カウントダウン設定
-void CountDownDisplay() {
+void CountDownDisplay(bool WifiWait = false) {
+  uint8_t MaxCount = CountDownMax;
+  if (WifiWait == true) MaxCount = 10;
+  
   CRGB c = colorChenge(ColorNo);
 
   unsigned int lismBuf = LismWidthMill;
   unsigned int stklism = millis() % lismBuf;
   byte justcolor = stklism / (lismBuf / 256);
 
-  int CountDownTime = CountDownMax - ((millis() - CountDowmMill) / 1000);
+  int CountDownTime = MaxCount - ((millis() - CountDowmMill) / 1000);
   if (CountDownTime < 0) CountDownTime = 0;
 
-  if (CountDownNowOld != CountDownTime) {
+  if ((WifiWait == false) && (CountDownNowOld != CountDownTime)) {
     CountDownNowOld = CountDownTime;
 
     if ((CountDownTime > 0) && (CountDownTime <= 5)) playMP3(mp3File[22 + CountDownTime]);
@@ -293,7 +296,7 @@ void CountDownDisplay() {
     else if (CountDownTime == 20) playMP3(mp3File[30]);
   }
   for (int i = 0; i < 20; i++) {
-    if (((20 / CountDownMax) * CountDownTime) > i) {
+    if (((20 / MaxCount) * CountDownTime) > i) {
       if (ColorNo == NoColor) {
         byte ColorChgJust = (i * 6) + justcolor;
         c = colorChenge(ColorChgJust);

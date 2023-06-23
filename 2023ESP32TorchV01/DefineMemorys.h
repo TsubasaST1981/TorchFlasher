@@ -4,8 +4,13 @@ char ssid[50] = "TorchFlasher";
 char password[50] = "0123";
 char ssidlocal[50] = "TorchFlasher";
 char passwordlocal[50] = "0123";
-#define LOCAL_PORT  283283  // 自分のポート番号
-#define REMOTE_PORT 283283  // 相手のポート番号
+#define LOCAL_PORT  52684  // 自分のポート番号
+#define REMOTE_PORT 52684  // 相手のポート番号
+
+// IPアドレス
+IPAddress localIP;  // 自分のIPアドレス
+IPAddress remoteIP; // 相手のIPアドレス
+
 
 //NeoPixel設定
 #define PIXEL_PIN   19    // Digital IO pin connected to the NeoPixels.
@@ -22,6 +27,7 @@ IPAddress apIP(192, 168, 1, 100);
 WebServer Server(80);
 // UDPオブジェクト
 static WiFiUDP udp;
+IPAddress castIP(192, 168, 1, 255);
 
 // scan SSID
 #define SSIDLIMIT 30
@@ -93,7 +99,12 @@ uint8_t PictureNo_old;
 bool MoziHalfMode = false;
 int btn2pushcnt = 0;
 unsigned long btn2lastmill = 0;
-int Wifilocal = 0;
+uint8_t WifilocalMode = 0;
+bool WifiClientSetup = false;
+unsigned long LastSendUdpMill = 0;
+uint8_t UdpReturnCheck = 0;
+bool ModeChangeFlg = false;
+bool MemoryChangeFlg = false;
 
 //メモリーモード記録ストラクチャー
 struct MemoryS {
@@ -126,6 +137,8 @@ struct MemoryS MemoryData[11];
 #define EEP_ADRS15 EEP_ADRS14 + sizeof(PictureNo)
 #define EEP_ADRS16 EEP_ADRS15 + sizeof(ssid) + 10
 #define EEP_ADRS17 EEP_ADRS16 + sizeof(password)
+#define EEP_ADRS18 EEP_ADRS17 + sizeof(WifilocalMode)
+
 
 void EEPWrite() {
   if (((EEPMill > 0) && (millis() > (EEPMill + 2000))) || (EEPMill == 1)) {
@@ -145,6 +158,7 @@ void EEPWrite() {
     EEPROM.put(EEP_ADRS14, PictureNo);
     EEPROM.put(EEP_ADRS15, ssid);
     EEPROM.put(EEP_ADRS16, password);
+    EEPROM.put(EEP_ADRS17, WifilocalMode);
 
     EEPROM.commit();
     EEPMill = 0;
@@ -168,6 +182,7 @@ void EEPRead() {
   EEPROM.get(EEP_ADRS14, PictureNo);
   EEPROM.get(EEP_ADRS15, ssid);
   EEPROM.get(EEP_ADRS16, password);
+  EEPROM.get(EEP_ADRS17, WifilocalMode);
 }
 
 //メモリーからの設定読み込み
